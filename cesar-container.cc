@@ -12,7 +12,12 @@
 #define CHILD_SIG SIGUSR1
 #endif
 
+
 static char *cmd = NULL;
+
+#define errExit(msg)    do { perror(msg); exit(EXIT_FAILURE); \
+                           } while (0)
+
 static int execute_command(void *arg) {
 	printf("Boom!");
 	 char *newargv[] = { NULL, NULL };
@@ -20,7 +25,7 @@ static int execute_command(void *arg) {
 
 	 if(arg != NULL) {
 		 newargv[0] = (char *)arg;
-		 execve(cmd, newargv, newenviron);
+		 execve(newargv[0], newargv, newenviron);
 		 perror("execve");   /* execve() returns only on error */
 		 printf("Error!!");
 		 exit(EXIT_FAILURE);
@@ -58,15 +63,18 @@ int main(int argc, char *argv[]) {
 
     cmd = argv[PROCESS_NAME]; 
 
-		if (CHILD_SIG != 0 && CHILD_SIG != SIGCHLD)
-			if (signal(CHILD_SIG, SIG_IGN) == SIG_ERR)
-            perror("signal");
-
 		/* Create child that has its own UTS namespace;
               child commences execution in childFunc() */
 
 	  pid = clone(execute_command, stackTop, CLONE_NEWUTS | SIGCHLD, argv[PROCESS_NAME]);
 		printf("clone() returned %ld\n", (long) pid);
+
+    if(pid == -1)
+      perror("error: clone()");
+
+    if(waitpid(pid, NULL, 0) == -1)    /* Wait for child */
+      errExit("waitpid");
+    printf("child has terminated \n");
   }
 
   return 0; 
