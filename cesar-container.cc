@@ -12,6 +12,8 @@
 #define CHILD_SIG SIGUSR1
 #endif
 
+#include <iostream>
+using namespace std;
 
 static char *cmd = NULL;
 
@@ -37,40 +39,55 @@ static int execute_command(void *arg) {
 	return 0;
 }
 
+pid_t contain(string processName, int (*executor)(void *)){
+
+  cout << "Containing: " << processName << endl; 
+
+	pid_t pid; 
+  const int STACK_SIZE = 65536;
+  char *stack;                    /* Start of stack buffer */
+  char *stackTop;                 /* End of stack buffer */
+
+  /* Allocate stack for child */
+	stack = (char *)malloc(STACK_SIZE);
+	if (stack == NULL)
+		 perror("Error allocating memory.");
+
+  cout << "stack size: " << STACK_SIZE << endl;
+  cout << "stack memory position (after): \t" << &stack << endl;
+
+	stackTop = stack + STACK_SIZE;  /* Assume stack grows downward */
+
+  cout << "stack memory position (before):\t" << &stackTop << endl;
+
+	pid = clone(executor, stackTop, CLONE_NEWUTS | SIGCHLD, (void *)processName.c_str());
+
+  if(pid == -1)
+   perror("error: clone()");
+  
+  cout << "child PID: " << pid << endl; 
+
+
+  return pid;
+}
+
 
 int main(int argc, char *argv[]) {
   
   puts("Cesar's Container \n");
 
-  for(int i=0; i < argc; i++ ){
-    printf("arg -> %s \n", argv[i]);
+  if(argc <= PROCESS_NAME) {
+    cout << "Usage: container run <process-name>" << endl;
+    cout << "Example:" << endl; 
+    cout << "container run /bin/bash   # this will contain the bash process" << endl; 
+    return 1;
   }
 
   // Check if we pass run in the command line. 
   if(strcmp(argv[CONTAINER_PARAM], "run") == 0) {
-    printf("Running... %s \n", argv[PROCESS_NAME]);
 
-		const int STACK_SIZE = 65536;
-    char *stack;                    /* Start of stack buffer */
-    char *stackTop;                 /* End of stack buffer */
-		pid_t pid; 
-
-		/* Allocate stack for child */
-		stack = (char *)malloc(STACK_SIZE);
-		if (stack == NULL)
-			 perror("Error allocating memory.");
-		stackTop = stack + STACK_SIZE;  /* Assume stack grows downward */
-
-    cmd = argv[PROCESS_NAME]; 
-
-		/* Create child that has its own UTS namespace;
-              child commences execution in childFunc() */
-
-	  pid = clone(execute_command, stackTop, CLONE_NEWUTS | SIGCHLD, argv[PROCESS_NAME]);
-		printf("clone() returned %ld\n", (long) pid);
-
-    if(pid == -1)
-      perror("error: clone()");
+	  cmd = argv[PROCESS_NAME]; 
+    auto pid = contain(argv[PROCESS_NAME], execute_command);
 
     if(waitpid(pid, NULL, 0) == -1)    /* Wait for child */
       errExit("waitpid");
