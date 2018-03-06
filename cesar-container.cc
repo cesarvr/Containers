@@ -7,6 +7,7 @@
 
 #define PROCESS_NAME 2
 #define CONTAINER_PARAM 1
+#define STACK_SIZE 65536
 
 #ifndef CHILD_SIG
 #define CHILD_SIG SIGUSR1
@@ -20,54 +21,41 @@ static char *cmd = NULL;
 #define errExit(msg)    do { perror(msg); exit(EXIT_FAILURE); \
                            } while (0)
 
-static int execute_command(void *arg) {
-	printf("Boom!");
-	 char *newargv[] = { NULL, NULL };
-	 char *newenviron[] = { NULL };
 
-	 if(arg != NULL) {
-		 newargv[0] = (char *)arg;
-		 execve(newargv[0], newargv, newenviron);
-		 perror("execve");   /* execve() returns only on error */
-		 printf("Error!!");
-		 exit(EXIT_FAILURE);
-	 }else{
-		 printf("Error!!");
-		 perror("Error not command was provided");   /* execve() returns only on error */
-		 exit(EXIT_FAILURE);
-	 }
-	return 0;
-}
-
-pid_t contain(string processName, int (*executor)(void *)){
-
-  cout << "Containing: " << processName << endl; 
-
-	pid_t pid; 
-  const int STACK_SIZE = 65536;
+char* buildStackMemory(int stackSize) {
   char *stack;                    /* Start of stack buffer */
   char *stackTop;                 /* End of stack buffer */
 
   /* Allocate stack for child */
-	stack = (char *)malloc(STACK_SIZE);
+	stack = (char *)malloc(stackSize);
 	if (stack == NULL)
 		 perror("Error allocating memory.");
 
-  cout << "stack size: " << STACK_SIZE << endl;
-  cout << "stack memory position (after): \t" << &stack << endl;
+	stackTop = stack + stackSize;  /* Assume stack grows downward */
 
-	stackTop = stack + STACK_SIZE;  /* Assume stack grows downward */
+  return stackTop;
+}
 
-  cout << "stack memory position (before):\t" << &stackTop << endl;
+static int execute_command(void *arg) {
+	 char *newargv[] = { NULL, NULL };
+	 char *newenviron[] = { NULL };
 
-	pid = clone(executor, stackTop, CLONE_NEWUTS | SIGCHLD, (void *)processName.c_str());
+   newargv[0] = (char *)arg;
+   execve(newargv[0], newargv, newenviron);
+   errExit("execve");   /* execve() returns only on error */
+	return 0;
+}
+
+pid_t contain(string processName, int (*executor)(void *)) {
+  cout << "Containing: " << processName << endl; 
+   
+  auto topOfStack = buildStackMemory(STACK_SIZE);  
+	auto pid = clone(executor, topOfStack, CLONE_NEWUTS | SIGCHLD, (void *)processName.c_str());
 
   if(pid == -1)
    perror("error: clone()");
   
   cout << "child PID: " << pid << endl; 
-
-
   return pid;
 }
 
