@@ -4,23 +4,25 @@
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/wait.h>
+#include <sys/utsname.h>
+
+#include <iostream>
+using namespace std;
+
 
 #define PROCESS_NAME 2
 #define CONTAINER_PARAM 1
 #define STACK_SIZE 65536
+#define PNAME "container"
 
 #ifndef CHILD_SIG
 #define CHILD_SIG SIGUSR1
 #endif
 
-#include <iostream>
-using namespace std;
-
 static char *cmd = NULL;
 
 #define errExit(msg)    do { perror(msg); exit(EXIT_FAILURE); \
                            } while (0)
-
 
 char* buildStackMemory(int stackSize) {
   char *stack;                    /* Start of stack buffer */
@@ -36,9 +38,13 @@ char* buildStackMemory(int stackSize) {
   return stackTop;
 }
 
+
 static int execute_command(void *arg) {
 	 char *newargv[] = { NULL, NULL };
 	 char *newenviron[] = { NULL };
+
+   if (sethostname(PNAME, strlen(PNAME)) == -1)
+     errExit("sethostname");
 
    newargv[0] = (char *)arg;
    execve(newargv[0], newargv, newenviron);
@@ -50,7 +56,7 @@ pid_t contain(string processName, int (*executor)(void *)) {
   cout << "Containing: " << processName << endl; 
    
   auto topOfStack = buildStackMemory(STACK_SIZE);  
-	auto pid = clone(executor, topOfStack, CLONE_NEWUTS | SIGCHLD, (void *)processName.c_str());
+	auto pid = clone(executor, topOfStack, CLONE_NEWUTS | CLONE_NEWPID | SIGCHLD, (void *)processName.c_str());
 
   if(pid == -1)
    perror("error: clone()");
